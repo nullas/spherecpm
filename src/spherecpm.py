@@ -1,5 +1,6 @@
 import scipy as sp
 import scipy.sparse
+import scipy.linalg
 import pylab as pl
 
 
@@ -43,30 +44,62 @@ def GenerateProjectionMat(x,y,cpx,cpy,gridsize):
             mat[tempidxy+idxx,(py+1)*gridsize+px+1] = gridscalar*(x[0,px+1]-cpx[idxy,idxx])*(y[py+1,0]-cpy[idxy,idxx])
     return mat
 
+def GenerateProjectionMat2(x,y,cpx,cpy,gridsize):
+    tempcpx = cpx.reshape((-1,))
+    tempcpy = cpy.reshape((-1,))
+    positionx=sp.floor_divide(tempcpx+2,4./(gridsize-1))
+    positiony=sp.floor_divide(tempcpy+2,4./(gridsize-1))
+    mat = scipy.sparse.lil_matrix((tempcpx.size,gridsize**2))
+    gridscalar = (gridsize-1)**2/16.
+    for idx in range(0,tempcpx.size):
+        px = int(positionx[idx])
+        py = int(positiony[idx])
+        mat[idx,py*gridsize+px] = gridscalar*(tempcpx[idx]-x[0,px])*(tempcpy[idx]-y[py,0])
+        mat[idx,py*gridsize+px+1] = gridscalar*(x[0,px+1]-tempcpx[idx])*(tempcpy[idx]-y[py,0])
+        mat[idx,(py+1)*gridsize+px] = gridscalar*(tempcpx[idx]-x[0,px])*(y[py+1,0]-tempcpy[idx])
+        mat[idx,(py+1)*gridsize+px+1] = gridscalar*(x[0,px+1]-tempcpx[idx])*(y[py+1,0]-tempcpy[idx])
+    return mat
+
 if __name__=="__main__":
     #initial
-    gridsize=30
-    k=0.05*(4./gridsize)**2
+    gridsizes=[20,40]
+    theta = sp.linspace(0,2*sp.pi,100)
+    xsphere = sp.sin(theta)
+    ysphere = sp.cos(theta)
+    
     err=[]
+    pl.figure()
     
     #code
-    x,y=GenerateGrids(gridsize)
-    cpx,cpy = ComputeCP(x,y)
-    u = cpy
-    pl.figure()
-    pl.pcolor(x,y,u)
-    pl.show()
-    u = u.reshape((-1,))
-    A = GenerateDiffMat(k,gridsize)
-    B = GenerateProjectionMat(x,y,cpx,cpy,gridsize)
-    C = B*A
+    for gridsize in gridsizes:
+        k=0.05*(4./gridsize)**2
+        x,y=GenerateGrids(gridsize)
+        cpx,cpy = ComputeCP(x,y)
+        u = cpy
+        pl.pcolor()
+        u = u.reshape((-1,))
+        A = GenerateDiffMat(k,gridsize)
+        B = GenerateProjectionMat(x,y,cpx,cpy,gridsize)
+        C = B*A
+        
+        for t in sp.arange(0,0.1,k):
+            u = u+C*u
+#        u = u.reshape((gridsize,-1))
+        
+        u_accu = sp.exp(-t)*sp.sin(theta)
+        D = GenerateProjectionMat2(x,y,xsphere,ysphere,gridsize)
+        u_interpolated = D*u
+        err.append(scipy.linalg.norm(u_accu-u_interpolated)*2*sp.pi/99.)
+        print err
+        
     
-    for t in sp.arange(0,0.1,k):
-        u = u+C*u
-    u = u.reshape((gridsize,-1))
+    pl.loglog(gridsizes,err)
     pl.figure()
-    pl.pcolormesh(x,y,u)
+    u = u.reshape((gridsize,-1))
+    pl.pcolor(x,y,u)
+    pl.axis('equal')
     pl.show()
+        
     
         
         
