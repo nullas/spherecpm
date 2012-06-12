@@ -17,9 +17,9 @@ def GenerateGrids(gsize):
     
     
 def GenerateDiffMat(k,gridsize):
-    kones = k*sp.ones((gridsize**2,))
-    minuskones = -1*kones
-    data = sp.array([4*kones,minuskones,minuskones,minuskones,minuskones])
+    tempk = k*(gridsize-1)**2/16
+    kones = tempk*sp.ones((gridsize**2,))
+    data = sp.array([-4*kones,kones,kones,kones,kones])
     return scipy.sparse.spdiags(data, [0,-1,1,gridsize,-gridsize],\
                              gridsize**2, gridsize**2 )
 
@@ -62,30 +62,32 @@ def GenerateProjectionMat2(x,y,cpx,cpy,gridsize):
 
 if __name__=="__main__":
     #initial
-    gridsizes=[20,40]
+    gridsizes=[40]
     theta = sp.linspace(0,2*sp.pi,100)
-    xsphere = sp.sin(theta)
-    ysphere = sp.cos(theta)
+    xsphere = sp.cos(theta)
+    ysphere = sp.sin(theta)
     
     err=[]
     pl.figure()
     
     #code
     for gridsize in gridsizes:
-        k=0.05*(4./gridsize)**2
+        k=0.001*(4./(gridsize-1))**2
         x,y=GenerateGrids(gridsize)
         cpx,cpy = ComputeCP(x,y)
         u = cpy
-        pl.pcolor()
         u = u.reshape((-1,))
         A = GenerateDiffMat(k,gridsize)
         B = GenerateProjectionMat(x,y,cpx,cpy,gridsize)
         C = B*A
         
-        for t in sp.arange(0,0.1,k):
+        for t in sp.arange(k,0.02,k):
             u = u+C*u
-#        u = u.reshape((gridsize,-1))
-        
+#            tempu = u.reshape((gridsize,-1))
+#            pl.figure()
+#            pl.pcolor(x,y,tempu)
+            
+#        pl.show()
         u_accu = sp.exp(-t)*sp.sin(theta)
         D = GenerateProjectionMat2(x,y,xsphere,ysphere,gridsize)
         u_interpolated = D*u
