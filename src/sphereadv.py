@@ -79,7 +79,7 @@ if __name__=="__main__":
     
     #code
     for gridsize in gridsizes:
-        k=0.0001*4./(gridsize-1)
+        k=0.005*4./(gridsize-1)
         x,y=GenerateGrids(gridsize)
         cpx,cpy = ComputeCP(x,y)
         u = cpy
@@ -87,25 +87,25 @@ if __name__=="__main__":
         A = GenerateDiffMat(x,y,k,gridsize)
         cpx_reshaped = cpx.reshape((-1,))
         cpy_reshaped = cpy.reshape((-1,))
-        x_reshaped = x.reshape((-1,))
-        y_reshaped = y.reshape((-1,))
+        x_reshaped = sp.linspace(-2,2,gridsize)
+        y_reshaped = sp.linspace(-2,2,gridsize)
         
         for t in sp.arange(k,1,k):
             u = u+A*u
-            f = scipy.interpolate.interp2d(x_reshaped,y_reshaped,u)
-            u = f(cpx_reshaped,cpy_reshaped)
-            
+            u = u.reshape((gridsize,-1))
+            f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,u)
+            u = f.ev(cpx_reshaped,cpy_reshaped)
             
         u_accu = sp.sin(theta+t)
-        f = scipy.interpolate.interp2d(x_reshaped,y_reshaped,u,kind='linear')
-        u_interpolated = f(xsphere,ysphere)
+        u = u.reshape((gridsize,-1))
+        f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,u)
+        u_interpolated = f.ev(xsphere,ysphere)
         err.append(scipy.linalg.norm(u_accu-u_interpolated)*2*sp.pi/99.)
         print err
         
     
     pl.loglog(gridsizes,err)
     pl.figure()
-    u = u.reshape((gridsize,-1))
     pl.pcolor(x,y,u)
     pl.axis('equal')
     pl.show()
