@@ -19,8 +19,9 @@ def GenerateGrids(gsize):
     
 def GenerateDiffMat(x,y,k,gridsize):
     mat = scipy.sparse.lil_matrix((gridsize**2,gridsize**2))
-    w1 = -sp.sin(cor2pol(x,y)[1])
-    w2 = sp.cos(cor2pol(x,y)[1])
+    r,tho = cor2pol(x,y)
+    w1 = -r*sp.sin(tho)
+    w2 = r*sp.cos(tho)
     for idxy in range(1,gridsize-1):
         tempidxy = idxy*gridsize
         for idxx in range(1,gridsize-1):
@@ -28,7 +29,8 @@ def GenerateDiffMat(x,y,k,gridsize):
             mat[tempidxy+idxx,tempidxy+idxx-1] = -w1[idxy,idxx]
             mat[tempidxy+idxx,tempidxy+gridsize+idxx] = w2[idxy,idxx]
             mat[tempidxy+idxx,tempidxy-gridsize+idxx] = -w2[idxy,idxx]
-    return k/2./(4./(gridsize-1))*mat
+    tempk = k/(2.*(4./(gridsize-1)))
+    return tempk*mat
         
 def ComputeCP(x,y):
     temp = sp.ones(x.shape)
@@ -69,17 +71,16 @@ def GenerateProjectionMat2(x,y,cpx,cpy,gridsize):
 
 if __name__=="__main__":
     #initial
-    gridsizes=[10,20,40,60]
+    gridsizes=[20,70,140]
     theta = sp.linspace(0,2*sp.pi,100)
     xsphere = sp.cos(theta)
     ysphere = sp.sin(theta)
     
     err=[]
-    pl.figure()
     
     #code
     for gridsize in gridsizes:
-        k=0.005*4./(gridsize-1)
+        k=0.01*04./(gridsize-1)
         x,y=GenerateGrids(gridsize)
         cpx,cpy = ComputeCP(x,y)
         u = cpy
@@ -90,23 +91,24 @@ if __name__=="__main__":
         x_reshaped = sp.linspace(-2,2,gridsize)
         y_reshaped = sp.linspace(-2,2,gridsize)
         
-        for t in sp.arange(k,1,k):
+        for t in sp.arange(k,0.5,k):
             u = u+A*u
-            u = u.reshape((gridsize,-1))
-            f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,u)
-            u = f.ev(cpx_reshaped,cpy_reshaped)
+            tempu = u.reshape((gridsize,-1))
+            f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,tempu)
+            u = f.ev(cpy_reshaped,cpx_reshaped)
             
         u_accu = sp.sin(theta+t)
         u = u.reshape((gridsize,-1))
         f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,u)
-        u_interpolated = f.ev(xsphere,ysphere)
+        u_interpolated = f.ev(ysphere,xsphere)
         err.append(scipy.linalg.norm(u_accu-u_interpolated)*2*sp.pi/99.)
         print err
         
-    
+    pl.figure()
     pl.loglog(gridsizes,err)
     pl.figure()
     pl.pcolor(x,y,u)
+    pl.colorbar()
     pl.axis('equal')
     pl.show()
         

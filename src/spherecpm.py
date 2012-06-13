@@ -1,6 +1,7 @@
 import scipy as sp
 import scipy.sparse
 import scipy.linalg
+import scipy.interpolate
 import pylab as pl
 
 
@@ -62,39 +63,42 @@ def GenerateProjectionMat2(x,y,cpx,cpy,gridsize):
 
 if __name__=="__main__":
     #initial
-    gridsizes=[40]
+    gridsizes=[40,80,160]
     theta = sp.linspace(0,2*sp.pi,100)
     xsphere = sp.cos(theta)
     ysphere = sp.sin(theta)
     
     err=[]
-    pl.figure()
+    
     
     #code
     for gridsize in gridsizes:
-        k=0.001*(4./(gridsize-1))**2
+        k=0.1*(4./(gridsize-1))**2
         x,y=GenerateGrids(gridsize)
         cpx,cpy = ComputeCP(x,y)
         u = cpy
         u = u.reshape((-1,))
         A = GenerateDiffMat(k,gridsize)
-        B = GenerateProjectionMat(x,y,cpx,cpy,gridsize)
-        C = B*A
+        cpx_reshaped = cpx.reshape((-1,))
+        cpy_reshaped = cpy.reshape((-1,))
+        x_reshaped = sp.linspace(-2,2,gridsize)
+        y_reshaped = sp.linspace(-2,2,gridsize)
         
-        for t in sp.arange(k,0.02,k):
-            u = u+C*u
-#            tempu = u.reshape((gridsize,-1))
-#            pl.figure()
-#            pl.pcolor(x,y,tempu)
+        
+        for t in sp.arange(k,0.1,k):
+            u = u+A*u
+            tempu = u.reshape((gridsize,-1))
+            f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,tempu)
+            u = f.ev(cpy_reshaped,cpx_reshaped)
             
-#        pl.show()
+            
         u_accu = sp.exp(-t)*sp.sin(theta)
         D = GenerateProjectionMat2(x,y,xsphere,ysphere,gridsize)
         u_interpolated = D*u
         err.append(scipy.linalg.norm(u_accu-u_interpolated)*2*sp.pi/99.)
         print err
         
-    
+    pl.figure()
     pl.loglog(gridsizes,err)
     pl.figure()
     u = u.reshape((gridsize,-1))
