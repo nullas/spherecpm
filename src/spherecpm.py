@@ -1,6 +1,7 @@
 import scipy as sp
 import scipy.sparse
 import scipy.linalg
+import scipy.interpolate
 import pylab as pl
 
 
@@ -17,9 +18,9 @@ def GenerateGrids(gsize):
     
     
 def GenerateDiffMat(k,gridsize):
-    kones = k*sp.ones((gridsize**2,))
-    minuskones = -1*kones
-    data = sp.array([4*kones,minuskones,minuskones,minuskones,minuskones])
+    tempk = k*(gridsize-1)**2/16
+    kones = tempk*sp.ones((gridsize**2,))
+    data = sp.array([-4*kones,kones,kones,kones,kones])
     return scipy.sparse.spdiags(data, [0,-1,1,gridsize,-gridsize],\
                              gridsize**2, gridsize**2 )
 
@@ -62,37 +63,42 @@ def GenerateProjectionMat2(x,y,cpx,cpy,gridsize):
 
 if __name__=="__main__":
     #initial
-    gridsizes=[20,40]
+    gridsizes=[40,80,160]
     theta = sp.linspace(0,2*sp.pi,100)
-    xsphere = sp.sin(theta)
-    ysphere = sp.cos(theta)
+    xsphere = sp.cos(theta)
+    ysphere = sp.sin(theta)
     
     err=[]
-    pl.figure()
+    
     
     #code
     for gridsize in gridsizes:
-        k=0.05*(4./gridsize)**2
+        k=0.1*(4./(gridsize-1))**2
         x,y=GenerateGrids(gridsize)
         cpx,cpy = ComputeCP(x,y)
         u = cpy
-        pl.pcolor()
         u = u.reshape((-1,))
         A = GenerateDiffMat(k,gridsize)
-        B = GenerateProjectionMat(x,y,cpx,cpy,gridsize)
-        C = B*A
+        cpx_reshaped = cpx.reshape((-1,))
+        cpy_reshaped = cpy.reshape((-1,))
+        x_reshaped = sp.linspace(-2,2,gridsize)
+        y_reshaped = sp.linspace(-2,2,gridsize)
         
-        for t in sp.arange(0,0.1,k):
-            u = u+C*u
-#        u = u.reshape((gridsize,-1))
         
+        for t in sp.arange(k,0.1,k):
+            u = u+A*u
+            tempu = u.reshape((gridsize,-1))
+            f = scipy.interpolate.RectBivariateSpline(x_reshaped,y_reshaped,tempu)
+            u = f.ev(cpy_reshaped,cpx_reshaped)
+            
+            
         u_accu = sp.exp(-t)*sp.sin(theta)
         D = GenerateProjectionMat2(x,y,xsphere,ysphere,gridsize)
         u_interpolated = D*u
         err.append(scipy.linalg.norm(u_accu-u_interpolated)*2*sp.pi/99.)
         print err
         
-    
+    pl.figure()
     pl.loglog(gridsizes,err)
     pl.figure()
     u = u.reshape((gridsize,-1))
