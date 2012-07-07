@@ -6,6 +6,7 @@ import scipy as sp
 import scipy.sparse
 
 
+
 def pol2car(r,tho):
     return r*sp.cos(tho),r*sp.sin(tho)
 
@@ -22,10 +23,29 @@ def ComputeCP(x):
     return rslt
 
 def GenerateDiffMatNP(k,m,n):
-    kones = k*sp.ones((m*n,))
-    data = sp.array([-4*kones,kones,kones,kones,kones])
-    return scipy.sparse.spdiags(data, [0,-1,1,m,-m],\
-                             m*n, m*n )
+    mat = sp.sparse.lil_matrix((m*n,(m+2)*(n+2)))
+    def helper_base(i,j,base,value,rm=m,rn=n,m=mat):
+        m[i*rm+j,(i+1)*(rm+2)+j+1+base]=value
+    def helper_1((i,j)):
+        helper_base(i,j,0,-4*k)
+    def helper_2((i,j)):
+        helper_base(i,j,-1,k)
+    def helper_3((i,j)):
+        helper_base(i,j,+1,k)
+    def helper_4((i,j),rm=m+2):
+        helper_base(i,j,-rm,k)
+    def helper_5((i,j),rm=m+2):
+        helper_base(i,j,rm,k)
+    li = [(i,j) for i in sp.arange(m) for j in sp.arange(n)]
+    map(helper_1,li)
+    map(helper_2,li)
+    map(helper_3,li)
+    map(helper_4,li)
+    map(helper_5,li)
+    return mat
+        
+        
+    
     
 def SetProjMatPETSC(cpCorArray,ProjMat,DA,vg):
     m = DA.getSizes()[0]
@@ -46,17 +66,17 @@ def SetProjMatPETSC(cpCorArray,ProjMat,DA,vg):
     mody = sp.mod(cpCorArray[:,1]+2.,dx)
     dx2 = dx**2
     for i in sp.arange(end-start):
-        ProjMat[i+start,idxbl[i]] = modx[i]*mody[i]/dx2
-        ProjMat[i+start,idxbr[i]] = (dx-modx[i])*mody[i]/dx2
-        ProjMat[i+start,idxul[i]] = modx[i]*(dx-mody[i])/dx2
-        ProjMat[i+start,idxur[i]] = (dx-modx[i])*(dx-mody[i])/dx2
+        ProjMat[i+start,idxbl[i]] = (dx-modx[i])*(dx-mody[i])/dx2
+        ProjMat[i+start,idxbr[i]] = modx[i]*(dx-mody[i])/dx2
+        ProjMat[i+start,idxul[i]] = (dx-modx[i])*mody[i]/dx2
+        ProjMat[i+start,idxur[i]] = modx[i]*mody[i]/dx2
     return
         
 
 #initial
 OptDB = PETSc.Options()
 dimension= OptDB.getInt('dim',2)
-m = OptDB.getReal('m',8)
+m = OptDB.getReal('m',40)
 
 #main
 DA = PETSc.DA()
@@ -71,55 +91,85 @@ DA.create(dim = dimension,
 DA.setUniformCoordinates(-2.0,2.0,-2.0,2.0,-2.0,2.0)
 
 vg = DA.createGlobalVector()
+vg.setFromOptions()
 vl = DA.createLocalVector()
 vCor = DA.getCoordinates()
 vCorArray = vCor.getArray()
 vCorArray = vCorArray.reshape((-1,dimension))
 cpCorArray = ComputeCP(vCorArray)
-PETSc.Sys.syncPrint(vg.getOwnershipRange(),'to',PETSc.COMM_WORLD.Get_rank())
-PETSc.Sys.syncPrint(vCorArray)
-PETSc.Sys.syncFlush()
-
 
 #IC
-vgArray = vg.getArray()
-vgArray = cpCorArray[:,1]
-vg.setArray(vgArray)
-DA.globalToLocal(vg,vl)
 
+vgArray = vg.getArray()
+
+vgArray = cpCorArray[:,1]+cpCorArray[:,0]-2
+
+#vg.set(1)
+#vtest = vg.duplicate()
+#vtest.setArray(vCorArray[:,1]+vCorArray[:,0])
+vg.setArray(vgArray)
+
+DA.globalToLocal(vg,vl)
+vnviewer = PETSc.Viewer().DRAW()
+
+
+
+
+
+#code
 
 dx = 4./m
 dt = 0.1*dx**2
 k = dt/dx**2
-(ix,iy),(rx,ry) = DA.getGhostCorners()
+(gix,giy),(grx,gry) = DA.getGhostCorners()
+(ix,iy),(rx,ry) = DA.getCorners()
+PETSc.Sys.syncPrint(ix,iy,rx,ry,'to',PETSc.COMM_WORLD.Get_rank())
+PETSc.Sys.syncFlush()
 DiffMat = GenerateDiffMatNP(k,rx,ry)
-ProjMat = PETSc.Mat()
-ProjMat.create()
-ProjMat.setSizes((m**2,m**2))
+ProjMat = DA.createMat()
+
 ProjMat.setType(PETSc.Mat.Type.MPIAIJ)
 ProjMat.setUp()
 SetProjMatPETSC(cpCorArray,ProjMat,DA,vg)
 ProjMat.assemblyBegin()
 ProjMat.assemblyEnd()
+
+
+#vtest2 = vtest.copy()
+#ProjMat.mult(vtest,vtest2)
+#vtest2.view(viewer=vnviewer)
+
+#PETSc.Sys.Print('Pause...')
+#if PETSc.COMM_WORLD.getRank() == 0:
+#    
+#    raw_input()
+    
+PETSc.COMM_WORLD.barrier()
+
 vgDup = vg.duplicate()
 for t in sp.arange(0,1,dt):
     DA.globalToLocal(vg,vl)
     vlArray = vl.getArray()
-    vlArray = vlArray+DiffMat*vlArray
-    vl.setArray(vlArray)
-    DA.localToGlobal(vl,vg)
+    vgArray = vg.getArray()
+    vgArray = vgArray+DiffMat*vlArray
+    vg.setArray(vgArray)
     ProjMat.mult(vg,vgDup)
     vg = vgDup.copy()
-vn = DA.createNaturalVec()
-DA.globalToNatural(vg,vn)
-from matplotlib import pylab as pl
-X,Y = sp.mgrid[-2:2:1j*m,-2:2:1j*m]
-pl.figure()
-Z = vg[...].reshape(m,m)
-pl.contourf(X,Y,Z)
-pl.axis('equal')
-pl.colorbar()
-pl.show()
+#    vg.view(viewer=vnviewer)
+#    PETSc.Sys.Print('Pause...')
+#    if PETSc.COMM_WORLD.Get_rank() == 0:
+#        raw_input()
+#    PETSc.COMM_WORLD.barrier()
+    
+
+vg.view(viewer=vnviewer)
+PETSc.Sys.Print('Pause...')
+if PETSc.COMM_WORLD.Get_rank() == 0:
+    raw_input()
+PETSc.COMM_WORLD.barrier()
+
+
+
 
 
 
