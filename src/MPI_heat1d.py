@@ -8,7 +8,7 @@ from matplotlib import pylab as pl
 
 OptDB = PETSc.Options()
 
-mlist = sp.array([20,100,400])
+mlist = sp.array([20,100,200])
 error = sp.array([])
 for m in mlist:
     
