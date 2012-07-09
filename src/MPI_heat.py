@@ -23,7 +23,7 @@ def ComputeCP(x):
     return rslt
 
 def GenerateDiffMatNP(k,m,n):
-    mat = scipy.sparse.lil_matrix((m*n,(m+2)*(n+2)))
+    mat = sp.sparse.lil_matrix((m*n,(m+2)*(n+2)))
     def helper_base(i,j,base,value,rm=m,rn=n,m=mat):
         m[i*rm+j,(i+1)*(rm+2)+j+1+base]=value
     def helper_1((i,j)):
@@ -47,10 +47,29 @@ def GenerateDiffMatNP(k,m,n):
         
     
     
-def SetProjMatPETSC(cpCorArray,ProjMat,DA):
+def SetProjMatPETSC(cpCorArray,ProjMat,DA,vg):
     m = DA.getSizes()[0]
     dx = 4./m
-
+    AO = DA.getAO()
+    psnx = sp.int32(sp.floor_divide(cpCorArray[:,0]+2.,dx))
+    psny = sp.int32(sp.floor_divide(cpCorArray[:,1]+2.,dx))
+    idxbl = psnx+psny*m
+    idxbr = psnx+1+psny*m
+    idxul = psnx+(psny+1)*m
+    idxur = psnx+1+(psny+1)*m
+    idxbl = AO.app2petsc(idxbl)
+    idxbr = AO.app2petsc(idxbr)
+    idxul = AO.app2petsc(idxul)
+    idxur = AO.app2petsc(idxur)
+    start,end = vg.getOwnershipRange()
+    modx = sp.mod(cpCorArray[:,0]+2.,dx)
+    mody = sp.mod(cpCorArray[:,1]+2.,dx)
+    dx2 = dx**2
+    for i in sp.arange(end-start):
+        ProjMat[i+start,idxbl[i]] = (dx-modx[i])*(dx-mody[i])/dx2
+        ProjMat[i+start,idxbr[i]] = modx[i]*(dx-mody[i])/dx2
+        ProjMat[i+start,idxul[i]] = (dx-modx[i])*mody[i]/dx2
+        ProjMat[i+start,idxur[i]] = modx[i]*mody[i]/dx2
     return
         
 
@@ -109,55 +128,9 @@ PETSc.Sys.syncFlush()
 DiffMat = GenerateDiffMatNP(k,rx,ry)
 ProjMat = DA.createMat()
 
-#SetProjMatPETSC(cpCorArray,ProjMat,DA)
-psnx = sp.int_(sp.floor_divide(cpCorArray[:,0]+2.,dx))
-psny = sp.int_(sp.floor_divide(cpCorArray[:,1]+2.,dx))
-
-modx = sp.mod(cpCorArray[:,0]+2.,dx)
-mody = sp.mod(cpCorArray[:,1]+2.,dx)
-dx2 = dx**2
-stenRow = ProjMat.Stencil()
-stenCol = ProjMat.Stencil()
-index = 0
-(ix,iy),(rx,ry) = DA.getCorners()
-for i in range(ix,ix+rx):
-    stenRow.i = i
-    for j in range(iy,iy+ry):
-        
-        
-        stenRow.j = j
-        
-        iCP = psnx[index]
-        jCP = psny[index]
-        
-        iCP = 0
-        jCP = 1
-        
-        stenCol.i = iCP
-        stenCol.j = jCP
-        ProjMat.setValueStencil(stenRow,
-                                stenCol,
-                                (dx-modx[index])*(dx-mody[index])/dx2)
-        
-        stenCol.i = iCP + 1
-        stenCol.j = jCP
-        ProjMat[1,42]=1
-        ProjMat.setValueStencil(stenRow,
-                                stenCol,
-                                modx[index]*(dx-mody[index])/dx2)
-
-        stenCol.i = iCP
-        stenCol.j = jCP + 1
-        ProjMat.setValueStencil(stenRow,
-                                stenCol,
-                                (dx-modx[index])*mody[index]/dx2)
-        
-        stenCol.i = iCP + 1
-        stenCol.j = jCP + 1
-        ProjMat.setValueStencil(stenRow,
-                                stenCol,
-                                modx[index]*mody[index]/dx2)
-        index = index + 1
+ProjMat.setType(PETSc.Mat.Type.MPIAIJ)
+ProjMat.setUp()
+SetProjMatPETSC(cpCorArray,ProjMat,DA,vg)
 ProjMat.assemblyBegin()
 ProjMat.assemblyEnd()
 
