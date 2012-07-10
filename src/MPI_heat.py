@@ -23,7 +23,7 @@ def ComputeCP(x):
     return rslt
 
 def GenerateDiffMatNP(k,m,n):
-    mat = sp.sparse.lil_matrix((m*n,(m+2)*(n+2)))
+    mat = scipy.sparse.lil_matrix((m*n,(m+2)*(n+2)))
     def helper_base(i,j,base,value,rm=m,rn=n,m=mat):
         m[i*rm+j,(i+1)*(rm+2)+j+1+base]=value
     def helper_1((i,j)):
@@ -43,7 +43,33 @@ def GenerateDiffMatNP(k,m,n):
     map(helper_4,li)
     map(helper_5,li)
     return mat
+
+def GenerateDiffMat(DA,k):
+    sten = PETSc.Mat.Stencil()
+    sten2 = PETSc.Mat.Stencil()
+    mat = DA.createMat()
+    (ix,iy),(rx,ry) = DA.getCorners()
+    def mat_helper((i,j),mat=mat ,sten = sten,sten2=sten2):
         
+        sten.index = (i,j)
+        mat.setValueStencil(sten,sten,1-4*k)
+        
+        sten2.index = (i,j+1)
+        mat.setValueStencil(sten,sten2,k)
+        
+        sten2.index = (i+1,j)
+        mat.setValueStencil(sten,sten2,k)
+        
+        sten2.index = (i-1,j)
+        mat.setValueStencil(sten,sten2,k)
+        
+        sten2.index = (i,j-1)
+        mat.setValueStencil(sten,sten2,k)
+        
+    map(mat_helper, [(i,j) for i in range(ix,ix+rx) for j in range(iy,iy+ry)])
+    mat.assemblyBegin()
+    mat.assemblyEnd()
+    return mat    
         
     
     
@@ -102,7 +128,7 @@ cpCorArray = ComputeCP(vCorArray)
 
 vgArray = vg.getArray()
 
-vgArray = cpCorArray[:,1]+cpCorArray[:,0]-2
+vgArray = cpCorArray[:,1]
 
 #vg.set(1)
 #vtest = vg.duplicate()
@@ -121,15 +147,21 @@ vnviewer = PETSc.Viewer().DRAW()
 dx = 4./m
 dt = 0.1*dx**2
 k = dt/dx**2
+p=3
 (gix,giy),(grx,gry) = DA.getGhostCorners()
 (ix,iy),(rx,ry) = DA.getCorners()
 PETSc.Sys.syncPrint(ix,iy,rx,ry,'to',PETSc.COMM_WORLD.Get_rank())
 PETSc.Sys.syncFlush()
-DiffMat = GenerateDiffMatNP(k,rx,ry)
-ProjMat = DA.createMat()
+DiffMat = GenerateDiffMat(DA,k)
+
+
+
+ProjMat = PETSc.Mat().create()
 
 ProjMat.setType(PETSc.Mat.Type.MPIAIJ)
-ProjMat.setUp()
+ProjMat.setSizes((m**2,m**2))
+ProjMat.setPreallocationNNZ(((p+1)**2,(p+1)**2))
+ProjMat.setFromOptions()
 SetProjMatPETSC(cpCorArray,ProjMat,DA,vg)
 ProjMat.assemblyBegin()
 ProjMat.assemblyEnd()
@@ -148,13 +180,8 @@ PETSc.COMM_WORLD.barrier()
 
 vgDup = vg.duplicate()
 for t in sp.arange(0,1,dt):
-    DA.globalToLocal(vg,vl)
-    vlArray = vl.getArray()
-    vgArray = vg.getArray()
-    vgArray = vgArray+DiffMat*vlArray
-    vg.setArray(vgArray)
-    ProjMat.mult(vg,vgDup)
-    vg = vgDup.copy()
+    DiffMat.mult(vg,vgDup)
+    ProjMat.mult(vgDup,vg)
 #    vg.view(viewer=vnviewer)
 #    PETSc.Sys.Print('Pause...')
 #    if PETSc.COMM_WORLD.Get_rank() == 0:
