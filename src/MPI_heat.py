@@ -102,7 +102,7 @@ def SetProjMatPETSC(cpCorArray,ProjMat,DA,vg):
 #initial
 OptDB = PETSc.Options()
 dimension= OptDB.getInt('dim',2)
-m = OptDB.getReal('m',40)
+m = OptDB.getReal('m',51)
 
 #main
 DA = PETSc.DA()
@@ -130,7 +130,6 @@ vgArray = vg.getArray()
 
 vgArray = cpCorArray[:,1]
 
-#vg.set(1)
 #vtest = vg.duplicate()
 #vtest.setArray(vCorArray[:,1]+vCorArray[:,0])
 vg.setArray(vgArray)
@@ -167,14 +166,20 @@ ProjMat.assemblyBegin()
 ProjMat.assemblyEnd()
 
 
-#vtest2 = vtest.copy()
-#ProjMat.mult(vtest,vtest2)
-#vtest2.view(viewer=vnviewer)
 
-#PETSc.Sys.Print('Pause...')
-#if PETSc.COMM_WORLD.getRank() == 0:
-#    
-#    raw_input()
+#test 
+vtest = vg.duplicate()
+vtest.setArray(vCorArray[:,1])
+vtest2 = vtest.copy()
+ProjMat.mult(vtest,vtest2)
+vtest2.view(viewer=vnviewer)
+PETSc.Sys.syncPrint(vg.getOwnershipRange())
+PETSc.Sys.syncPrint(ProjMat.getOwnershipRange())
+PETSc.Sys.syncFlush()
+PETSc.Sys.Print('Pause...')
+if PETSc.COMM_WORLD.getRank() == 0:
+    
+    raw_input()
     
 PETSc.COMM_WORLD.barrier()
 
@@ -187,16 +192,8 @@ for t in sp.arange(0,1,dt):
 #    if PETSc.COMM_WORLD.Get_rank() == 0:
 #        raw_input()
 #    PETSc.COMM_WORLD.barrier()
-    
-
 vg.view(viewer=vnviewer)
 PETSc.Sys.Print('Pause...')
 if PETSc.COMM_WORLD.Get_rank() == 0:
     raw_input()
 PETSc.COMM_WORLD.barrier()
-
-
-
-
-
-

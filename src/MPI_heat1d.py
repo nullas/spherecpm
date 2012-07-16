@@ -1,6 +1,7 @@
 import os, petsc4py
 petsc4py.init(os.sys.argv)
 from petsc4py import PETSc
+import numpy
 
 import scipy as sp
 
@@ -8,7 +9,7 @@ from matplotlib import pylab as pl
 
 OptDB = PETSc.Options()
 
-mlist = sp.array([20,100,200])
+mlist = sp.array([50,100,200])
 error = sp.array([])
 for m in mlist:
     
@@ -61,15 +62,15 @@ for m in mlist:
     PC.setType('none')
     KSP.setFromOptions()
     
-    vgDup = vg.duplicate()
+    vnew = vg.duplicate()
     
     for t in sp.arange(0,1,dt):
-        KSP.solve(vg,vgDup)
-        vg = vgDup.copy()
+        KSP.solve(vg,vnew)   # solve linear system L vnew = vg
+        vg = vnew.copy()
         
     if PETSc.COMM_WORLD.getRank() == 0:
         
-        u = sp.array([vg[2]])
+        u = sp.array([vg[numpy.floor(m/4)]])
         u_acc = sp.array([sp.exp(-t*sp.pi**2)*sp.sin(sp.pi*(DA.getCoordinates()[2]))])
         error = sp.concatenate((error,sp.absolute(u-u_acc)))
         
