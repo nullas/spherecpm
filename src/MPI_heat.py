@@ -103,6 +103,7 @@ def SetProjMatPETSC(cpCorArray,ProjMat,DA,vg):
 OptDB = PETSc.Options()
 dimension= OptDB.getInt('dim',2)
 m = OptDB.getReal('m',51)
+#doesn't work for m=k*10, I think the way how I find the base point is problematic
 
 #main
 DA = PETSc.DA()
@@ -158,30 +159,32 @@ DiffMat = GenerateDiffMat(DA,k)
 ProjMat = PETSc.Mat().create()
 
 ProjMat.setType(PETSc.Mat.Type.MPIAIJ)
-ProjMat.setSizes((m**2,m**2))
+ProjMat.setSizes((vg.sizes,vg.sizes))
 ProjMat.setPreallocationNNZ(((p+1)**2,(p+1)**2))
 ProjMat.setFromOptions()
 SetProjMatPETSC(cpCorArray,ProjMat,DA,vg)
 ProjMat.assemblyBegin()
 ProjMat.assemblyEnd()
 
+PETSc.Sys.Print(vg.sizes,ProjMat.sizes)
+
 
 
 #test 
-vtest = vg.duplicate()
-vtest.setArray(vCorArray[:,1])
-vtest2 = vtest.copy()
-ProjMat.mult(vtest,vtest2)
-vtest2.view(viewer=vnviewer)
-PETSc.Sys.syncPrint(vg.getOwnershipRange())
-PETSc.Sys.syncPrint(ProjMat.getOwnershipRange())
-PETSc.Sys.syncFlush()
-PETSc.Sys.Print('Pause...')
-if PETSc.COMM_WORLD.getRank() == 0:
-    
-    raw_input()
-    
-PETSc.COMM_WORLD.barrier()
+#vtest = vg.duplicate()
+#vtest.setArray(vCorArray[:,1])
+#vtest2 = vtest.copy()
+#ProjMat.mult(vtest,vtest2)
+#vtest2.view(viewer=vnviewer)
+#PETSc.Sys.syncPrint(vg.getOwnershipRange())
+#PETSc.Sys.syncPrint(ProjMat.getOwnershipRange())
+#PETSc.Sys.syncFlush()
+#PETSc.Sys.Print('Pause...')
+#if PETSc.COMM_WORLD.getRank() == 0:
+#    
+#    raw_input()
+#    
+#PETSc.COMM_WORLD.barrier()
 
 vgDup = vg.duplicate()
 for t in sp.arange(0,1,dt):
@@ -193,7 +196,7 @@ for t in sp.arange(0,1,dt):
 #        raw_input()
 #    PETSc.COMM_WORLD.barrier()
 vg.view(viewer=vnviewer)
-PETSc.Sys.Print('Pause...')
+PETSc.Sys.Print('Press any key...')
 if PETSc.COMM_WORLD.Get_rank() == 0:
     raw_input()
 PETSc.COMM_WORLD.barrier()
