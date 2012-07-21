@@ -31,14 +31,14 @@ def GenDiffMat(x):
     mat[i,i] = -2./(dx[i]*dx[i+1])
     mat[i,i-1] = 2/(dx[i]*(dx[i]+dx[i+1]))
     return mat
-m = 20
+m = 100
 x = rn(m)
 
 
 n = 40
 y = rn(n)
 
-#x = sp.linspace(0,1,11)
+#x = sp.linspace(0,1,101)
 mat = GenDiffMat(x)
 ev,ew = scipy.linalg.eig(mat)
 print ev
@@ -52,8 +52,9 @@ pl.plot(y,'ro')
 pl.figure()
 pl.plot(ev.real,ev.imag,'r+')
 pl.plot([-4/min(x[1:]-x[:-1])**2],[0],'ko')
-
-
-
+pl.figure()
+pl.plot(x[1:-1],ew[:,0])
+pl.plot(x[1:-1],ew[:,1])
+pl.plot(x[1:-1],ew[:,2])
 
 pl.show()
