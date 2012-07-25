@@ -63,12 +63,20 @@ def GenExtensionMat(y,x):
     
     
     
-m = 40
-x = rn(m)
 
 
-n = 100
+
+n = 60
 y = rn(n)
+
+m = 50
+
+xind = sp.random.randint(0,n-1,m-1)
+sp.concatenate((xind,[n-2]))
+xind = sp.unique(xind)
+
+x = y[xind]
+
 
 #x = sp.linspace(0,1,101)
 mat = GenDiffMat(y)
@@ -87,9 +95,8 @@ ExtMat = GenExtensionMat(y,x)
 #print '----------------------------------------\n'
 #fy = ExtMat*fx
 
-ExtMat2 = GenExtensionMat(x,y)
 
-Mat = ExtMat2*mat*ExtMat
+Mat = mat[xind,:]*ExtMat
 ev2,ew2 = scipy.linalg.eig(Mat)
 print sp.sort(ev2)
 #plot
