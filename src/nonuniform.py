@@ -71,8 +71,8 @@ y = rn(n)
 
 m = 50
 
-xind = sp.random.randint(0,n-1,m-1)
-sp.concatenate((xind,[n-2]))
+xind = sp.random.randint(0,n-1,m)
+sp.concatenate((xind,[n-1]))
 xind = sp.unique(xind)
 
 x = y[xind]
@@ -96,7 +96,7 @@ ExtMat = GenExtensionMat(y,x)
 #fy = ExtMat*fx
 
 
-Mat = mat[xind,:]*ExtMat
+Mat = mat[xind[:-1],:]*ExtMat
 ev2,ew2 = scipy.linalg.eig(Mat)
 print sp.sort(ev2)
 #plot
